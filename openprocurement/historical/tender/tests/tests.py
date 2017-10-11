@@ -9,6 +9,7 @@ from openprocurement.historical.core.constants import (
     VERSION,
     PREVIOUS_HASH as PHASH,
     HASH,
+    VERSION_BY_DATE,
 )
 from openprocurement.api.tests.base import (
     BaseTenderWebTest,
@@ -212,3 +213,51 @@ class HistoricalTenderTestCase(BaseTenderWebTest):
             u'location': u'tender',
             u'name': u'revision'}
         ])
+
+    def test_get_tender_by_date(self):
+        self._update_doc()
+
+        # The date is longer than the date of modification
+        response = self.app.get('/tenders/{}/historical'.format(
+            self.tender_id), headers={VERSION_BY_DATE: '2300-06-16T18:21:28.415863+03:00'}, status=404)
+        self.assertEqual(response.status, '404 Not Found')
+        self.assertEqual(response.json['status'], 'error')
+        self.assertEqual(response.json['errors'], [{
+            u'description': u'Not Found',
+            u'location': u'header',
+            u'name': u'hash'
+        }])
+
+        # Date is less than the date of create the tender
+        response = self.app.get('/tenders/{}/historical'.format(
+            self.tender_id), headers={VERSION_BY_DATE: '2000-06-14T16:36:53.273990+03:00'}, status=404)
+        self.assertEqual(response.status, '404 Not Found')
+        self.assertEqual(response.json['status'], 'error')
+        self.assertEqual(response.json['errors'], [{
+            u'description': u'Not Found',
+            u'location': u'header',
+            u'name': u'hash'
+        }])
+        # The correct date to search
+        response = self.app.get('/tenders/{}/historical'.format(
+            self.tender_id), headers={VERSION_BY_DATE: '2016-06-14T17:00:39.374726+03:00'})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.content_type, 'application/json')
+
+        # Other date format
+        response = self.app.get('/tenders/{}/historical'.format(
+            self.tender_id), headers={VERSION_BY_DATE: '2016-06-14T17:00:39'})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.content_type, 'application/json')
+
+        # First revision
+        response = self.app.get('/tenders/{}/historical'.format(
+            self.tender_id), headers={VERSION_BY_DATE: '2016-06-14T16:59:58.951698+03:00'})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.content_type, 'application/json')
+
+        # Date between revisions 5 and 6
+        response = self.app.get('/tenders/{}/historical'.format(
+            self.tender_id), headers={VERSION_BY_DATE: '2016-06-14T17:17:33.000000+03:00'})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.content_type, 'application/json')
