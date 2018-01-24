@@ -221,6 +221,98 @@ class HistoricalTenderTestCase(BaseTenderWebTest):
             u'name': u'revision'}
         ])
 
+    def test_batch_tenders(self):
+        self._update_doc()
+        response = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                                headers={'X-Revision-N': ''})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.content_type, 'application/json')
+        amount_of_versions = response.headers.get('X-Revision-N')
+        tender_last_version = response.json['data']
+
+        # Last version
+
+        response = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                                headers={'X-Mode-Batch': amount_of_versions})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.content_type, 'application/json')
+        self.assertEqual(len(response.json['data']), 1)
+        self.assertEqual(response.json['data'][0]['dateModified'], tender_last_version['dateModified'])
+
+        # Invalid version
+
+        response = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                                headers={'X-Mode-Batch': '17'}, status=404)
+
+        self.assertEqual(response.status, '404 Not Found')
+        self.assertEqual(response.json['errors'], [{
+            u'description': u'Not Found',
+            u'location': u'header',
+            u'name': u'version'
+        }])
+
+        # All versions
+
+        response = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                                headers={'X-Mode-Batch': '1'})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.content_type, 'application/json')
+        self.assertEqual(len(response.json['data']), int(amount_of_versions))
+
+        # First version
+
+        res = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                           headers={'X-Revision-N': '1'})
+        self.assertEqual(res.status, '200 OK')
+        first_version = res.json
+        self.assertEqual(response.json['data'][0]['dateModified'], first_version['data']['dateModified'])
+
+        # Tenth version
+
+        res = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                           headers={'X-Revision-N': '10'})
+        self.assertEqual(res.status, '200 OK')
+        tenth_version = res.json
+        self.assertEqual(response.json['data'][9]['dateModified'], tenth_version['data']['dateModified'])
+
+        # Invalid version
+
+        response = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                                headers={'X-Mode-Batch': 'invalid_1'}, status=404)
+        self.assertEqual(response.status, '404 Not Found')
+        self.assertEqual(response.json['errors'], [{
+            u'description': u'Not Found',
+            u'location': u'header',
+            u'name': u'version'
+        }])
+
+        # Many headers
+        response = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                                headers={'X-Mode-Batch': '5', 'X-Revision-N': '3'}, status=404)
+        self.assertEqual(response.status, '404 Not Found')
+        self.assertEqual(response.json['errors'], [{
+            u'description': u'Not Found',
+            u'location': u'header',
+            u'name': u'many headers'
+        }])
+
+        response = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                                headers={'X-Mode-Batch': '5', 'X-Revision-Date': '2016-06-14T16:59:58.951698+03:00'},
+                                status=404)
+        self.assertEqual(response.status, '404 Not Found')
+        self.assertEqual(response.json['errors'], [{
+            u'description': u'Not Found',
+            u'location': u'header',
+            u'name': u'many headers'
+        }])
+
+        response = self.app.get('/tenders/{}/historical'.format(self.tender_id),
+                                headers={'X-Mode-Batch': ''})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.content_type, 'application/json')
+        data = response.json['data']
+        self.assertEqual(data['dateModified'], tender_last_version['dateModified'])
+
 
 class TestGetHistoricalData(BaseTenderWebTest):
     relative_to = os.path.dirname(__file__)
